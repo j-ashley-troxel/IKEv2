@@ -1,0 +1,235 @@
+
+[ISP]
+
+int gi0/0
+ip address 192.168.10.1 255.255.255.252
+no shut
+
+int gi0/1
+ip address 192.168.20.1 255.255.255.252
+no shut
+
+int gi0/2
+ip address 192.168.30.1 255.255.255.252
+no shut
+
+
+
+[R1 hub]
+
+int gi0/0
+ip address 192.168.10.2 255.255.255.252
+no shut
+
+int gi0/1
+ip address 172.16.10.1 255.255.255.0
+no shut
+
+
+ip route 0.0.0.0 0.0.0.0 gi0/0 192.168.10.1
+
+crypto ikev2 proposal gcm256_sha256_dh21
+encryption aes-gcm-256
+group 21
+prf sha256
+
+crypto ikev2 policy 1
+proposal gcm256_sha256_dh21
+
+crypto ipsec transform-set gcm256 esp-gcm 256
+mode tunnel
+
+aaa new-model
+aaa authorization network flex_auth_spoke local
+
+ip local pool spoke_pool 10.10.10.2 10.10.10.5
+
+ip access-list standard hub_net 
+permit 172.16.10.0 0.0.0.255
+permit 172.17.10.0 0.0.0.255
+permit 172.17.20.0 0.0.0.255
+
+crypto ikev2 authorization policy flex_policy_spoke
+pool spoke_pool
+route set interface
+route set access-list hub_net
+
+crypto ikev2 keyring flex_keyring
+peer R2
+address 192.168.20.2
+pre-shared-key local k3y_pa$$
+pre-shared-key remote k3y_pa$$
+exit
+peer R3
+address 192.168.30.2
+pre-shared-key local k3y_pa$$
+pre-shared-key remote k3y_pa$$
+
+crypto ikev2 profile flex_profile
+match identity remote address 192.168.20.2
+match identity remote address 192.168.30.2
+identity local address 192.168.10.2
+keyring local flex_keyring
+authentication remote pre-share
+authentication local pre-share
+aaa authorization group psk list flex_auth_spoke flex_policy_spoke
+virtual-template 1
+
+crypto ipsec profile flex_ipsec_profile
+set transform-set gcm256
+set ikev2-profile flex_profile
+
+interface loopback 0
+ip address 10.10.10.1 255.255.255.255
+
+interface virtual-template 1 type tunnel
+ip unnumbered loopback 0
+tunnel source gi0/0
+tunnel protection ipsec profile flex_ipsec_profile
+
+no ip dhcp conflict logging
+ip dhcp excluded-address 172.16.10.1
+ip dhcp pool lan_0/1
+network 172.16.10.0 255.255.255.0
+default-router 172.16.10.1
+
+
+[R2 spoke]
+
+int gi0/0
+ip address 192.168.20.2 255.255.255.252
+no shut
+
+int gi0/1
+ip address 172.17.10.1 255.255.255.0
+no shut
+
+
+ip route 0.0.0.0 0.0.0.0 gi0/0 192.168.20.1
+
+crypto ikev2 proposal gcm256_sha256_dh21
+encryption aes-gcm-256
+group 21
+prf sha256
+
+crypto ikev2 policy 1
+proposal gcm256_sha256_dh21
+
+crypto ipsec transform-set gcm256 esp-gcm 256
+mode tunnel
+
+aaa new-model
+aaa authorization network flex_auth_spoke local
+
+ip access-list standard spoke_net 
+permit 172.17.10.0 0.0.0.255
+
+crypto ikev2 keyring flex_keyring
+peer HQ
+address 192.168.10.2
+pre-shared-key local k3y_pa$$
+pre-shared-key remote k3y_pa$$
+
+crypto ikev2 authorization policy flex_policy_spoke
+route set interface
+route set access-list spoke_net
+
+crypto ikev2 profile flex_profile
+match identity remote address 192.168.10.2
+identity local address 192.168.20.2
+keyring local flex_keyring
+authentication remote pre-share
+authentication local pre-share
+aaa authorization group psk list flex_auth_spoke flex_policy_spoke
+
+crypto ipsec profile flex_ipsec_profile
+set transform-set gcm256
+set ikev2-profile flex_profile
+
+interface tunnel 0
+ip address negotiated
+tunnel source gi0/0
+tunnel destination 192.168.10.2
+tunnel protection ipsec profile flex_ipsec_profile
+
+no ip dhcp conflict logging
+ip dhcp excluded-address 172.17.10.1
+ip dhcp pool lan_0/1
+network 172.17.10.0 255.255.255.0
+default-router 172.17.10.1
+
+[R3 spoke]
+
+int gi0/0
+ip address 192.168.30.2 255.255.255.252
+no shut
+
+int gi0/1
+ip address 172.17.20.1 255.255.255.0
+no shut
+
+ip route 0.0.0.0 0.0.0.0 gi0/0 192.168.30.1
+
+crypto ikev2 proposal gcm256_sha256_dh21
+encryption aes-gcm-256
+group 21
+prf sha256
+
+crypto ikev2 policy 1
+proposal gcm256_sha256_dh21
+
+crypto ipsec transform-set gcm256 esp-gcm 256
+mode tunnel
+
+aaa new-model
+aaa authorization network flex_auth_spoke local
+
+ip access-list standard spoke_net 
+permit 172.17.20.0 0.0.0.255
+
+crypto ikev2 keyring flex_keyring
+peer HQ
+address 192.168.10.2
+pre-shared-key local k3y_pa$$
+pre-shared-key remote k3y_pa$$
+
+crypto ikev2 authorization policy flex_policy_spoke
+route set interface
+route set access-list spoke_net
+
+crypto ikev2 profile flex_profile
+match identity remote address 192.168.10.2
+identity local address 192.168.30.2
+keyring local flex_keyring
+authentication remote pre-share
+authentication local pre-share
+aaa authorization group psk list flex_auth_spoke flex_policy_spoke
+
+crypto ipsec profile flex_ipsec_profile
+set transform-set gcm256
+set ikev2-profile flex_profile
+
+interface tunnel 0
+ip address negotiated
+tunnel source gi0/0
+tunnel destination 192.168.10.2
+tunnel protection ipsec profile flex_ipsec_profile
+
+
+no ip dhcp conflict logging
+ip dhcp excluded-address 172.17.20.1
+ip dhcp pool lan_0/1
+network 172.17.20.0 255.255.255.0
+default-router 172.17.20.1
+
+
+
+
+
+
+
+
+
+
+
+
