@@ -1,0 +1,329 @@
+https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/sec_conn_getvpn/configuration/xe-17-1/sec-get-vpn-xe-17-book/sec-get-vpn-gikev2.html
+
+https://www.cisco.com/en/US/docs/ios-xml/ios/sec_conn_getvpn/configuration/15-2mt/sec-get-vpn.html
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-router links
+172.16.50.0/30 (KS .1 R2 .2)
+172.16.50.4/30 (R2 .5 R1 .6)
+172.16.50.8/30 (R2 .9 R3 .10)
+172.16.50.12/30 (R2 .13 R4 .14)
+
+-LAN subnets
+10.10.10.0/29 (R1)
+10.10.10.8/29 (R3)
+10.10.10.16/29 (R4)
+
+-GETVPN encryption domain 
+10.10.10.0/27
+
+-------------------------------
+
+[KS]
+
+int gi0/0
+ip address 172.16.50.1 255.255.255.252
+no shut
+
+router ospf 1
+network 172.16.50.0 255.255.255.252 area 0
+
+crypto ikev2 proposal gcm256_prf-sha512_dh-21
+encryption aes-gcm-256
+prf sha512
+group 21
+
+crypto ikev2 policy 1
+proposal gcm256_prf-sha512_dh-21
+
+crypto ikev2 keyring GETVPN_Group1_Keyring
+peer R1_Peer
+address 172.16.50.6
+pre-shared-key s3cr3T@!
+exit
+peer R3_Peer
+address 172.16.50.10
+pre-shared-key s3cr3T@!
+exit
+peer R4_Peer
+address 172.16.50.14
+pre-shared-key s3cr3T@!
+
+crypto ikev2 profile GETVPN_Group1_Profile
+keyring local GETVPN_Group1_Keyring
+authentication local pre-share
+authentication remote pre-share
+match identity remote address 172.16.50.6
+match identity remote address 172.16.50.10
+match identity remote address 172.16.50.14
+
+crypto ipsec transform-set GETVPN_Group1 esp-aes 256 esp-sha256-hmac
+
+crypto ipsec profile GETVPN_Group1_Profile
+set security-association lifetime seconds 3600
+set transform-set GETVPN_Group1
+
+
+#digital signature for rekey messages 
+#KEK control plane rekey
+#TEK payload encryption (IPsec SA)
+crypto key generate rsa general-keys label GETVPN_KEYS mod 2048 export
+
+ip access-list extended GETVPN_Group1
+permit ip 10.10.10.0 0.0.0.31 10.10.10.0 0.0.0.31
+
+crypto gdoi group GETVPN_Group1
+identity number 1
+server local
+gikev2 GETVPN_Group1_Profile 
+rekey transport unicast
+rekey retransmit 10 number 2
+rekey authentication mypubkey rsa GETVPN_KEYS
+address ipv4 172.16.50.1
+sa ipsec 1
+profile GETVPN_Group1_Profile
+match address ipv4 GETVPN_Group1
+replay counter window-size 5
+
+
+
+------------------------------
+
+[R2]
+
+int gi0/0
+ip address 172.16.50.2 255.255.255.252
+no shut
+
+int gi0/1
+ip address 172.16.50.5 255.255.255.252
+no shut
+
+int gi0/2
+ip address 172.16.50.9 255.255.255.252
+no shut
+
+int gi0/3
+ip address 172.16.50.13 255.255.255.252
+no shut
+
+router ospf 1
+network 172.16.50.0 255.255.255.240 area 0
+
+
+
+------------------------------
+
+[R1]
+
+int gi0/0
+ip address 172.16.50.6 255.255.255.252
+no shut
+
+int gi0/1
+ip address 10.10.10.1 255.255.255.248
+no shut
+
+router ospf 1
+network 172.16.50.4 255.255.255.252 area 0
+network 10.10.10.0 255.255.255.248 area 0
+
+no ip dhcp conflict logging
+ip dhcp excluded-address 10.10.10.1
+ip dhcp pool lan_0/1
+network 10.10.10.0 255.255.255.248
+default-router 10.10.10.1
+
+crypto ikev2 proposal gcm256_prf-sha512_dh-21
+encryption aes-gcm-256
+prf sha512
+group 21
+
+crypto ikev2 policy 1
+proposal gcm256_prf-sha512_dh-21
+
+crypto ikev2 keyring GETVPN_Group1_Keyring
+peer KS
+address 172.16.50.1
+pre-shared-key s3cr3T@!
+
+crypto ikev2 profile GETVPN_Group1_Profile
+keyring local GETVPN_Group1_Keyring
+authentication local pre-share
+authentication remote pre-share
+match identity remote address 172.16.50.1
+
+crypto gdoi group GETVPN_Group1
+identity number 1
+server address ipv4 172.16.50.1
+client protocol gikev2 GETVPN_Group1_Profile
+
+crypto map GETVPN_MAP 10 gdoi
+set group GETVPN_Group1
+set ikev2-profile GETVPN_Group1_Profile
+
+int gi0/0
+crypto map GETVPN_MAP
+
+-------------------
+
+[R3]
+
+int gi0/0
+ip address 172.16.50.10 255.255.255.252
+no shut
+
+int gi0/1
+ip address 10.10.10.9 255.255.255.248
+no shut
+
+router ospf 1
+network 172.16.50.8 255.255.255.252 area 0
+network 10.10.10.8 255.255.255.248 area 0
+
+no ip dhcp conflict logging
+ip dhcp excluded-address 10.10.10.9
+ip dhcp pool lan_0/1
+network 10.10.10.8 255.255.255.248
+default-router 10.10.10.9
+
+crypto ikev2 proposal gcm256_prf-sha512_dh-21
+encryption aes-gcm-256
+prf sha512
+group 21
+
+crypto ikev2 policy 1
+proposal gcm256_prf-sha512_dh-21
+
+crypto ikev2 keyring GETVPN_Group1_Keyring
+peer KS
+address 172.16.50.1
+pre-shared-key s3cr3T@!
+
+crypto ikev2 profile GETVPN_Group1_Profile
+keyring local GETVPN_Group1_Keyring
+authentication local pre-share
+authentication remote pre-share
+match identity remote address 172.16.50.1
+
+crypto gdoi group GETVPN_Group1
+identity number 1
+server address ipv4 172.16.50.1
+client protocol gikev2 GETVPN_Group1_Profile
+
+crypto map GETVPN_MAP 10 gdoi
+set group GETVPN_Group1
+set ikev2-profile GETVPN_Group1_Profile
+
+int gi0/0
+crypto map GETVPN_MAP
+
+--------------------
+
+[R4]
+
+int gi0/0
+ip address 172.16.50.14 255.255.255.252
+no shut
+
+int gi0/1
+ip address 10.10.10.17 255.255.255.248
+no shut
+
+router ospf 1
+network 172.16.50.12 255.255.255.252 area 0
+network 10.10.10.16 255.255.255.248 area 0
+
+no ip dhcp conflict logging
+ip dhcp excluded-address 10.10.10.17
+ip dhcp pool lan_0/1
+network 10.10.10.16 255.255.255.248
+default-router 10.10.10.17
+
+crypto ikev2 proposal gcm256_prf-sha512_dh-21
+encryption aes-gcm-256
+prf sha512
+group 21
+
+crypto ikev2 policy 1
+proposal gcm256_prf-sha512_dh-21
+
+crypto ikev2 keyring GETVPN_Group1_Keyring
+peer KS
+address 172.16.50.1
+pre-shared-key s3cr3T@!
+
+crypto ikev2 profile GETVPN_Group1_Profile
+keyring local GETVPN_Group1_Keyring
+authentication local pre-share
+authentication remote pre-share
+match identity remote address 172.16.50.1
+
+crypto gdoi group GETVPN_Group1
+identity number 1
+server address ipv4 172.16.50.1
+client protocol gikev2 GETVPN_Group1_Profile
+
+crypto map GETVPN_MAP 10 gdoi
+set group GETVPN_Group1
+set ikev2-profile GETVPN_Group1_Profile
+
+int gi0/0
+crypto map GETVPN_MAP
+
+------------
+
++1 .128
++2 .192
++3 .224
++4 .240
++5 .248
++6 .252
++7 .254
+
+debug crypto gdoi ks all-features all-levels
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

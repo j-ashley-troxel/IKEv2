@@ -1,0 +1,214 @@
+tunnel interfaces
+192.168.10.0/29
+
+lan segments
+R1 10.16.30.0/29
+R2 10.5.10.0/29
+
+[HQ]
+int gi0/0
+ip address 30.50.60.1 255.255.255.252
+no shut
+
+int gi0/1
+ip address 172.16.20.1 255.255.255.248
+no shut
+
+crypto isakmp policy 1
+encryption aes 256
+hash sha256
+authentication pre-share
+group 14
+
+crypto ipsec transform-set aes256sha256 esp-aes 256 esp-sha256-hmac
+mode tunnel
+
+crypto ipsec profile DMVPN_Profile
+set transform-set aes256sha256
+
+crypto isakmp key p$k_k3y address 205.30.1.1
+crypto isakmp key p$k_k3y address 168.5.10.1
+
+router eigrp 1
+no auto-summary
+network 192.168.10.0 0.0.0.7
+
+ip route 0.0.0.0 0.0.0.0 gigabitEthernet 0/0 30.50.60.2
+
+int tunnel 0
+ip address 192.168.10.1 255.255.255.248
+tunnel source gi0/0
+tunnel mode gre multipoint
+tunnel key 82910
+ip nhrp authentication p$k_k3y
+ip nhrp map multicast dynamic
+ip nhrp network-id 1
+ip mtu 1400
+ip tcp adjust-mss 1360
+no ip split-horizon eigrp 1
+tunnel protection ipsec profile DMVPN_Profile
+
+
+[ISP]
+
+int gi0/0
+ip address 30.50.60.2 255.255.255.252
+no shut
+
+int gi0/1
+ip address 205.30.1.2 255.255.255.252
+no shut
+
+int gi0/2
+ip address 168.5.10.2 255.255.255.252
+no shut
+
+
+
+
+[R1]
+int gi0/0
+ip address 205.30.1.1 255.255.255.252
+no shut
+
+int gi0/1
+ip address 10.16.30.1 255.255.255.248
+no shut
+
+crypto isakmp policy 1
+encryption aes 256
+hash sha256
+authentication pre-share
+group 14
+
+crypto ipsec transform-set aes256sha256 esp-aes 256 esp-sha256-hmac
+mode tunnel
+
+crypto ipsec profile DMVPN_Profile
+set transform-set aes256sha256
+
+crypto isakmp key p$k_k3y address 30.50.60.1
+
+router eigrp 1
+no auto-summary
+network 192.168.10.0 0.0.0.7
+network 10.16.30.0 255.255.255.248
+
+ip route 0.0.0.0 0.0.0.0 gigabitEthernet 0/0 205.30.1.2
+
+int tunnel 0
+ip address 192.168.10.2 255.255.255.248
+tunnel source gi0/0
+tunnel destination 30.50.60.1
+tunnel key 82910
+ip nhrp authentication p$k_k3y 
+ip nhrp network-id 1
+ip nhrp nhs 192.168.10.1
+ip nhrp map multicast 30.50.60.1
+ip nhrp map 192.168.10.1 30.50.60.1
+tunnel protection ipsec profile DMVPN_Profile
+ip mtu 1400
+ip tcp adjust-mss 1360
+no ip split-horizon eigrp 1
+
+no ip dhcp conflict logging
+ip dhcp excluded-address 10.16.30.1
+ip dhcp pool lan_0/1
+network 10.16.30.0 255.255.255.248
+default-router 10.16.30.1
+
+[R2]
+int gi0/0
+ip address 168.5.10.1 255.255.255.252
+no shut
+
+int gi0/1
+ip address 10.5.10.1 255.255.255.248
+no shut
+
+crypto isakmp policy 1
+encryption aes 256
+hash sha256
+authentication pre-share
+group 14
+
+crypto ipsec transform-set aes256sha256 esp-aes 256 esp-sha256-hmac
+mode tunnel
+
+crypto ipsec profile DMVPN_Profile
+set transform-set aes256sha256
+
+crypto isakmp key p$k_k3y address 30.50.60.1
+
+router eigrp 1 
+no auto-summary
+network 10.5.10.0 255.255.255.248
+network 192.168.10.0 0.0.0.7
+
+ip route 0.0.0.0 0.0.0.0 gigabitEthernet 0/0 168.5.10.2
+
+int tunnel 0
+ip address 192.168.10.3 255.255.255.248
+tunnel source gi0/0
+tunnel destination 30.50.60.1
+tunnel key 82910
+ip nhrp authentication p$k_k3y 
+ip nhrp network-id 1
+ip nhrp nhs 192.168.10.1
+ip nhrp map multicast 30.50.60.1
+ip nhrp map 192.168.10.1 30.50.60.1
+tunnel protection ipsec profile DMVPN_Profile
+ip mtu 1400
+ip tcp adjust-mss 1360
+no ip split-horizon eigrp 1
+
+no ip dhcp conflict logging
+ip dhcp excluded-address 10.5.10.1
+ip dhcp pool lan_0/1
+network 10.5.10.0 255.255.255.248
+default-router 10.5.10.1
+
+----------------
+
+[crypto]
+
+crypto isakmp policy 1
+encryption aes 256
+hash sha256
+authentication pre-share
+group 14
+
+crypto ipsec transform-set aes256sha256 esp-aes 256 esp-sha256-hmac
+mode tunnel
+
+crypto ipsec profile DMVPN_Profile
+set transform-set aes256sha256
+
+[R1,R2]
+crypto isakmp key p$k_k3y address 30.50.60.1
+
+[HQ]
+crypto isakmp key p$k_k3y address 205.30.1.1
+crypto isakmp key p$k_k3y address 168.5.10.1
+
+
+----------------------
+
+[DHCP]
+
+no ip dhcp conflict logging
+ip dhcp excluded-address 10.10.30.1
+ip dhcp pool lan_0/1
+network 10.10.30.0 255.255.255.248
+default-router 10.10.30.1
+
+
+
+
+
+
+
+
+
+
+
