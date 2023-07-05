@@ -1,0 +1,270 @@
+
+
+[ASAv]
+G0/1 - inside
+10.50.3.0/29
+
+G0/0 - outside 
+20.5.7.0/30
+
+enable - pass_asa
+
+
+------------------
+
+[ISP_INTERWEBZ]
+G0/1 - to ASAv
+20.5.7.0/30
+
+G0/0 - to CSR1000v
+12.100.0.0/30
+
+
+
+[CSR1000v]
+GE1 - outside
+12.100.0.0/30
+
+GE2 - inside
+172.16.20.0/29
+
+
+---------------------------
+ASAv
+
+enable - pass_asa
+
+#initial config
+sho interface ip brief
+
+config t
+interface gi0/0
+nameif outside
+description outside to interwebz
+ip address 20.5.7.1 255.255.255.252
+no shutdown
+exit
+
+route outside 0.0.0.0 0.0.0.0 20.5.7.2
+
+
+int gi0/1
+nameif inside
+description inside trusted network
+ip address 10.50.3.1 255.255.255.248
+exit
+
+wr mem
+
+
+#phase 2 proposals
+crypto ipsec ikev2 ipsec-proposal gcm256 
+protocol esp encryption aes-gcm-256
+protocol esp integrity null
+exit
+
+crypto ipsec ikev2 ipsec-proposal aes256sha256
+protocol esp encryption aes-256
+protocol esp integrity sha-256
+exit
+
+sho run crypto ipsec
+
+#phase 1 proposals
+crypto ikev2 enable outside
+
+crypto ikev2 policy 10
+ encryption aes-gcm-256
+ integrity null
+ group 21
+ prf sha512
+ 
+ crypto ikev2 policy 20
+ encryption aes-256
+ integrity sha256
+ group 19
+ prf sha256
+
+sho run crypto ikev2
+
+#object config
+object network alpine_2
+host 10.50.3.5
+
+object network csr_remote
+subnet 172.16.20.0 255.255.255.248
+
+#tunnel config
+#peer ip: 12.100.0.2
+#psk: 8497vJ$@#9cZ
+crypto map tunnelz interface outside
+
+access-list ASA_2_CSR extended permit ip 10.50.3.0 255.255.255.248 172.16.20.0 255.255.255.248
+
+
+tunnel-group 12.100.0.2 type ipsec-l2l
+tunnel-group 12.100.0.2 ipsec-attributes
+ikev2 local-authentication pre-shared-key 8497vJ$@#9cZ
+ikev2 remote-authentication pre-shared-key 8497vJ$@#9cZ
+
+crypto map tunnelz 10 set peer 12.100.0.2
+crypto map tunnelz 10 match address ASA_2_CSR
+crypto map tunnelz 10 set ikev2 ipsec-proposal gcm256
+
+nat (inside,outside) source static alpine_2 alpine_2 destination static csr_remote csr_remote
+
+nat (inside,outside) source static asa_local asa_local destination static csr_remote csr_remote
+
+packet-tracer input inside tcp 10.50.3.5 1024 172.16.20.2 443
+---------------------------
+ISP_INTERNET
+
+sho ip interface brief
+
+config t
+hostname isp_internet
+int gi0/1
+description to asa
+ip address 20.5.7.2 255.255.255.252
+no shutdown
+exit
+
+int gi0/0
+description to csr100v
+ip address 12.100.0.1 255.255.255.252
+no shutdown
+exit
+
+-------------
+CSR1000v
+
+#initial config
+config t
+hostname csr_1000v
+
+int gigabitEthernet1
+description outside to isp_interwebz
+ip address 12.100.0.2 255.255.255.252
+no shutdown
+
+
+int gigabitEthernet2
+description inside to lan
+ip address 172.16.20.1 255.255.255.248
+no shutdown
+
+ip route 0.0.0.0 0.0.0.0 12.100.0.1
+
+#phase 2 proposals
+crypto ipsec transform-set gcm256 esp-gcm 256
+mode tunnel
+
+crypto ipsec transform-set aes256sha256 esp-256-aes esp-sha256-hmac
+mode tunnel
+
+#phase 1 proposals
+crypto ikev2 proposal gcm-256_prf-sha256_dh-21
+crypto ikev2 proposal aes-256_sha-256_prf-sha256_dh-19
+crypto ikev2 proposal gcm-256_prf-sha512_dh-21
+encryption aes-gcm-256
+prf sha512
+group 21
+
+#phase 1 policy
+crypto ikev2 policy 10
+proposal gcm-256_prf-sha512_dh-21
+
+
+acl: CSR_2_ASA
+acl_profile: CSR_2_ASA_Profile
+acl_keyring: CSR_2_ASA_Keyring
+acl_peer: CSR_2_ASA_Peer
+
+#tunnel config
+crypto ikev2 keyring CSR_2_ASA_Keyring
+peer CSR_2_ASA_Peer
+address 20.5.7.1
+pre-shared-key 8497vJ$@#9cZ
+
+crypto ikev2 profile CSR_2_ASA_Profile
+authentication local pre-share
+authentication remote pre-share
+match identity remote address 20.5.7.1
+keyring local CSR_2_ASA_Keyring
+
+ip access-list extended CSR_2_ASA
+permit ip 172.16.20.0 0.0.0.7 10.50.3.0 0.0.0.7 
+
+crypto map tunnelz 10 ipsec-isakmp
+match address CSR_2_ASA
+set peer 20.5.7.1
+set ikev2-profile CSR_2_ASA_Profile
+set transform-set gcm256
+
+interface gigabitEthernet1
+crypto map tunnelz
+----------
+
+alpine_1(on csr100v)
+ip 172.16.20.5
+
+alpine_2 (on asa)
+ip 10.50.3.5
+
+
+sudo passwd root
+alp1ne
+
+/etc/network/interfaces
+
+auto eth0
+iface eth0 inet static
+	address 10.50.3.5
+	netmask 255.255.255.248
+	gateway 10.50.3.1
+	hostname alpine_2
+
+auto eth0	
+iface eth0 inet static
+	address 172.16.20.5
+	netmask 255.255.255.248
+	gateway 172.16.20.1
+	hostname alpine_1
+
+/etc/init.d/networking restart
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
